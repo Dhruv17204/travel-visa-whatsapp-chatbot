@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Case {
+  id                String   @id @default(uuid()) @db.Uuid
+  applicantId       String
+  maskedContact     String
+  destination       String
+  currentStage      String
+  assignedOwner     String?
+  nextAction        String
+  updatedTime       DateTime @updatedAt
+
+  // Implementation choices
+  createdTime       DateTime @default(now())
+  conversationState Json?
+  sheetsRowId       String?
+
+  documents    Document[]
+  appointments Appointment[]
+  events       Event[]
+
+  @@index([applicantId])
+}
+
+enum DocumentState {
+  MISSING
+  RECEIVED
+  FLAGGED
+  REJECTED
+  APPROVED
+}
+
+model Document {
+  id           String        @id @default(uuid()) @db.Uuid
+  caseId       String        @db.Uuid
+  applicantId  String
+  type         String
+  version      Int
+  currentFlag  String?
+  driveFileId  String?
+  state        DocumentState
+  reviewer     String?
+  reason       String?
+  reviewedTime DateTime?
+
+  // Implementation choices
+  fileHash     String?
+  createdTime  DateTime      @default(now())
+
+  case Case @relation(fields: [caseId], references: [id])
+
+  @@unique([caseId, type, version])
+}
+
+model Appointment {
+  id              String   @id @default(uuid()) @db.Uuid
+  caseId          String   @db.Uuid
+  type            String
+  staffCalendarId String
+  start           DateTime
+  end             DateTime
+  timezone        String
+  status          String
+  calendarEventId String?
+
+  // Implementation choices
+  createdTime DateTime @default(now())
+  updatedTime DateTime @updatedAt
+
+  case Case @relation(fields: [caseId], references: [id])
+
+  @@index([staffCalendarId, start, end, status])
+}
+
+model Event {
+  id           String   @id @default(uuid()) @db.Uuid
+  caseId       String?  @db.Uuid
+  type         String
+  createdTime  DateTime @default(now())
+  syncState    String
+  errorSummary String?
+
+  // Implementation choices
+  externalProviderId String? @unique
+  payload            Json?
+
+  case Case? @relation(fields: [caseId], references: [id])
+}
