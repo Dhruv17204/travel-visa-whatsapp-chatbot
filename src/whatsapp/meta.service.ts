@@ -30,33 +30,75 @@ export class MetaService implements OnModuleInit {
     
     this.logger.log(`Sending ${method} request to /${this.config.graphApiVersion}/<phone-id>/${endpoint} for recipient ${safeRecipient}`);
 
+    const maxRetries = 3;
+    let lastError: any;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch(url, {
+          method,
+          headers: {
+            'Authorization': `Bearer ${this.config.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: payload ? JSON.stringify(payload) : undefined,
+        });
+
+        if (!response.ok) {
+          let errorDetails = '';
+          try {
+            const errorJson = await response.json();
+            const code = errorJson?.error?.code || 'unknown';
+            const msg = errorJson?.error?.message || 'unknown error';
+            errorDetails = `Code: ${code}, Msg: ${msg}`;
+          } catch (e) {
+            errorDetails = 'Could not parse error JSON';
+          }
+          this.logger.error(`Meta API Request Failed: Status ${response.status}. ${errorDetails}`);
+          throw new Error(`Meta API Request Failed: Status ${response.status}`);
+        }
+
+        const data = await response.json();
+        const messageId = data?.messages?.[0]?.id || 'unknown';
+        this.logger.log(`Meta API Request Success: Status ${response.status}. Message ID: ${messageId}`);
+        return data;
+
+      } catch (error: any) {
+        lastError = error;
+        // If it's not an HTTP error (e.g. network timeout/fetch failed), retry it
+        if (!error.message.includes('Status')) {
+          this.logger.warn(`Meta API fetch failed (Attempt ${attempt}/${maxRetries}): ${error.message}. Retrying...`);
+          if (attempt < maxRetries) {
+            await new Promise(res => setTimeout(res, attempt * 1000)); // Exponential backoff
+            continue;
+          }
+        }
+        throw lastError;
+      }
+    }
+
+    return;
+  }
+
+  public async getMediaMetadata(mediaId: string): Promise<any> {
+    if (!this.config) {
+      throw new Error('MetaService is not initialized');
+    }
+
+    const url = `${this.baseUrl}/${this.config.graphApiVersion}/${mediaId}`;
+    this.logger.log(`Fetching metadata for media ${mediaId}`);
+
     const response = await fetch(url, {
-      method,
+      method: 'GET',
       headers: {
         'Authorization': `Bearer ${this.config.accessToken}`,
-        'Content-Type': 'application/json',
       },
-      body: payload ? JSON.stringify(payload) : undefined,
     });
 
     if (!response.ok) {
-      let errorDetails = '';
-      try {
-        const errorJson = await response.json();
-        const code = errorJson?.error?.code || 'unknown';
-        const msg = errorJson?.error?.message || 'unknown error';
-        errorDetails = `Code: ${code}, Msg: ${msg}`;
-      } catch (e) {
-        errorDetails = 'Could not parse error JSON';
-      }
-      this.logger.error(`Meta API Request Failed: Status ${response.status}. ${errorDetails}`);
-      throw new Error(`Meta API Request Failed: Status ${response.status}`);
+      throw new Error(`Failed to fetch media metadata. Status: ${response.status}`);
     }
 
-    const data = await response.json();
-    const messageId = data?.messages?.[0]?.id || 'unknown';
-    this.logger.log(`Meta API Request Success: Status ${response.status}. Message ID: ${messageId}`);
-    
-    return data;
+    return await response.json();
   }
 }
