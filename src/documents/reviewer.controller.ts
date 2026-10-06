@@ -111,13 +111,11 @@ export class ReviewerController {
         </tr>
     `;
 
-    const pendingDocs = docs.filter(d => d.state === 'RECEIVED' && d.currentFlag === 'true');
-
-    if (pendingDocs.length === 0) {
-      body += `<tr><td colspan="8" style="text-align:center; padding: 30px; color:#666;">No pending documents require review.</td></tr>`;
+    if (docs.length === 0) {
+      body += `<tr><td colspan="8" style="text-align:center; padding: 30px; color:#666;">No documents in the system.</td></tr>`;
     }
 
-    for (const doc of pendingDocs) {
+    for (const doc of docs) {
       body += `
         <tr>
           <td><strong>${doc.caseId}</strong></td>
@@ -129,6 +127,10 @@ export class ReviewerController {
           <td>${doc.reviewer || '-'}</td>
           <td>
             <a href="https://drive.google.com/file/d/${doc.driveFileId}/view" target="_blank" class="btn btn-secondary" style="margin-right: 5px;">View File</a>
+            `;
+
+      if (doc.state === 'RECEIVED' && doc.currentFlag === 'true') {
+        body += `
             <button class="btn btn-success" onclick="showModal('approve-${doc.id}')" style="margin-right: 5px;">Approve</button>
             <button class="btn btn-danger" onclick="showModal('reject-${doc.id}')">Reject</button>
 
@@ -160,6 +162,10 @@ export class ReviewerController {
                 </form>
               </div>
             </div>
+        `;
+      }
+      
+      body += `
           </td>
         </tr>
       `;
