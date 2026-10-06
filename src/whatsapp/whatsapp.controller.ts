@@ -101,7 +101,9 @@ export class WhatsappController {
           await this.conversationService.updateState(senderId, { draftData: draft });
         }
 
-        if (session.currentState === CONVERSATION_STATES.HUMAN_HANDOFF) {
+        const isResetKeyword = msgType === 'text' && msgText && ['hi', 'hello', 'start', 'mainmenu'].includes(msgText.toLowerCase().replace(/[^\w\s]/gi, '').trim());
+
+        if (session.currentState === CONVERSATION_STATES.HUMAN_HANDOFF && !isResetKeyword) {
           this.logger.log(`Ignoring message from ${senderId} - Handed off to human.`);
           return 'EVENT_RECEIVED';
         }
