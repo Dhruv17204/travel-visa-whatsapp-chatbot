@@ -90,7 +90,7 @@ describe('ReviewerController', () => {
     }));
     expect(mockSlackService.sendReviewNotification).toHaveBeenCalled();
     expect(mockMetaService.sendRequest).toHaveBeenCalled();
-    expect(result).toContain('Document Approved Successfully');
+    expect(result).toContain('has been approved successfully');
   });
 
   it('should reject a document with reason', async () => {

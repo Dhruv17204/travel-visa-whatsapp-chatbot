@@ -15,8 +15,10 @@ describe('AppController', () => {
   });
 
   describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+    it('should return landing page html', () => {
+      const html = appController.getLandingPage();
+      expect(html).toContain('Travel Visa Assistant');
+      expect(html).toContain('Portfolio Project');
     });
   });
 });
