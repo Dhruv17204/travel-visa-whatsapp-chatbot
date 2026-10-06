@@ -166,7 +166,7 @@ export class WhatsappController {
     await this.conversationService.updateState(senderId, { currentState: CONVERSATION_STATES.SELECT_DOCUMENT, selectedDoc: null });
     return this.sendInteractiveButtons(senderId, `Upload successful! Document version ${result.document?.version || 1} saved safely.`, [
       { id: 'doc_select', title: 'Upload more' },
-      { id: 'menu_visa', title: 'Main Menu' }
+      { id: 'main_menu_action', title: 'Main Menu' }
     ]);
   }
 
@@ -258,8 +258,35 @@ export class WhatsappController {
         await this.conversationService.updateState(senderId, { currentState: CONVERSATION_STATES.MAIN_MENU, draftData: {} });
         return this.sendText(senderId, res.message); // Request received
 
-      default:
+      case CONVERSATION_STATES.SELECT_DOCUMENT:
+        return this.sendInteractiveButtons(senderId, 'Invalid input. Please use the menu to select a document to upload:', [
+          { id: 'doc_passport', title: 'Passport' },
+          { id: 'doc_photo', title: 'Photo' },
+          { id: 'doc_itinerary', title: 'Travel Itinerary' }
+        ]);
+
+      case CONVERSATION_STATES.AWAIT_UPLOAD:
+        return this.sendText(senderId, `Invalid input. Please upload the requested file (Accepted formats: Image, PDF).`);
+
+      case CONVERSATION_STATES.SELECT_APPOINTMENT:
+        return this.sendInteractiveButtons(senderId, 'Invalid input. Please choose an appointment type:', [
+          { id: 'intro_call', title: 'Intro call' },
+          { id: 'visa_appointment', title: 'Visa appointment' },
+          { id: 'talk_to_team', title: 'Talk to team' }
+        ]);
+
+      case CONVERSATION_STATES.APPT_CONFIRM_SLOT:
+        return this.sendInteractiveButtons(senderId, 'Invalid input. Please confirm your slot selection:', [
+          { id: 'confirm_booking', title: 'Confirm booking' },
+          { id: 'change_slot', title: 'Change slot' },
+          { id: 'cancel', title: 'Cancel' }
+        ]);
+
+      case CONVERSATION_STATES.MAIN_MENU:
         return this.sendMainMenu(senderId);
+
+      default:
+        return this.sendText(senderId, 'Invalid input. Please use the provided buttons or type "hi" to reset to the main menu.');
     }
   }
 
@@ -268,34 +295,44 @@ export class WhatsappController {
     const caseId = await this.conversationService.ensureCaseExists(senderId);
 
     switch (actionId) {
+      case 'main_menu_action':
+        await this.conversationService.updateState(senderId, { currentState: CONVERSATION_STATES.MAIN_MENU, draftData: {} });
+        return this.sendMainMenu(senderId);
+
       // VISA ENQUIRY
       case 'menu_visa':
+        if (session.currentState !== CONVERSATION_STATES.MAIN_MENU && session.currentState !== CONVERSATION_STATES.SELECT_DOCUMENT) return this.sendStaleWarning(senderId);
+        await this.conversationService.updateState(senderId, { currentState: CONVERSATION_STATES.VISA_ENQUIRY_DESTINATION, draftData: {} });
+        return this.sendText(senderId, 'Which country are you planning to visit?');
+
       case 'edit_details':
+        if (session.currentState !== CONVERSATION_STATES.VISA_ENQUIRY_CONFIRM) return this.sendStaleWarning(senderId);
         await this.conversationService.updateState(senderId, { currentState: CONVERSATION_STATES.VISA_ENQUIRY_DESTINATION, draftData: {} });
         return this.sendText(senderId, 'Which country are you planning to visit?');
       
       case 'purpose_tourist':
       case 'purpose_business':
       case 'purpose_other':
-        if (session.currentState !== CONVERSATION_STATES.VISA_ENQUIRY_PURPOSE) return this.sendMainMenu(senderId);
+        if (session.currentState !== CONVERSATION_STATES.VISA_ENQUIRY_PURPOSE) return this.sendStaleWarning(senderId);
         draft.purpose = actionId === 'purpose_tourist' ? 'Tourist visa' : actionId === 'purpose_business' ? 'Business visa' : 'Other';
         await this.conversationService.updateState(senderId, { currentState: CONVERSATION_STATES.VISA_ENQUIRY_NATIONALITY, draftData: draft });
         return this.sendText(senderId, 'What is your nationality?');
 
       case 'app_first':
       case 'app_renewal':
-        if (session.currentState !== CONVERSATION_STATES.VISA_ENQUIRY_APP_TYPE) return this.sendMainMenu(senderId);
+        if (session.currentState !== CONVERSATION_STATES.VISA_ENQUIRY_APP_TYPE) return this.sendStaleWarning(senderId);
         draft.appType = actionId === 'app_first' ? 'First application' : 'Renewal';
         await this.conversationService.updateState(senderId, { currentState: CONVERSATION_STATES.VISA_ENQUIRY_DEPARTURE, draftData: draft });
         return this.sendText(senderId, 'What is your intended departure date?');
 
       case 'confirm_details':
-        if (session.currentState !== CONVERSATION_STATES.VISA_ENQUIRY_CONFIRM) return this.sendMainMenu(senderId);
+        if (session.currentState !== CONVERSATION_STATES.VISA_ENQUIRY_CONFIRM) return this.sendStaleWarning(senderId);
         await this.conversationService.updateState(senderId, { currentState: CONVERSATION_STATES.MAIN_MENU, draftData: {} });
         return this.sendText(senderId, 'Your visa enquiry draft has been saved. Our team will review and confirm requirements. returning to main menu.');
 
       // APPOINTMENTS
       case 'menu_appointments':
+        if (session.currentState !== CONVERSATION_STATES.MAIN_MENU) return this.sendStaleWarning(senderId);
         await this.conversationService.updateState(senderId, { currentState: CONVERSATION_STATES.SELECT_APPOINTMENT });
         return this.sendInteractiveButtons(senderId, 'What kind of appointment do you need?', [
           { id: 'intro_call', title: 'Intro call' },
@@ -304,7 +341,7 @@ export class WhatsappController {
         ]);
 
       case 'intro_call':
-        if (session.currentState !== CONVERSATION_STATES.SELECT_APPOINTMENT) return this.sendMainMenu(senderId);
+        if (session.currentState !== CONVERSATION_STATES.SELECT_APPOINTMENT) return this.sendStaleWarning(senderId);
         try {
           const slots = await this.appointmentsService.getAvailableSlots(new Date().toISOString());
           if (slots.length === 0) {
@@ -333,8 +370,8 @@ export class WhatsappController {
         }
 
       case 'confirm_booking':
-        if (session.currentState !== CONVERSATION_STATES.APPT_CONFIRM_SLOT) return this.sendMainMenu(senderId);
-        if (!draft.selectedSlot) return this.sendMainMenu(senderId);
+        if (session.currentState !== CONVERSATION_STATES.APPT_CONFIRM_SLOT) return this.sendStaleWarning(senderId);
+        if (!draft.selectedSlot) return this.sendStaleWarning(senderId);
         
         const bookingResult = await this.appointmentsService.bookStaffCall(caseId, draft.selectedSlot);
         if (!bookingResult.success) {
@@ -348,21 +385,28 @@ export class WhatsappController {
         return this.sendText(senderId, bookingResult.message);
         
       case 'change_slot':
-        if (session.currentState !== CONVERSATION_STATES.APPT_CONFIRM_SLOT) return this.sendMainMenu(senderId);
+        if (session.currentState !== CONVERSATION_STATES.APPT_CONFIRM_SLOT) return this.sendStaleWarning(senderId);
         try {
           const slots = await this.appointmentsService.getAvailableSlots(new Date().toISOString());
-          if (slots.length === 0) {
-            return this.sendText(senderId, 'No alternative slots available right now.');
+          
+          const alternativeSlots = slots.filter(s => new Date(s.start).getTime() !== new Date(draft.selectedSlot.start).getTime());
+
+          if (alternativeSlots.length === 0) {
+            return this.sendInteractiveButtons(senderId, 'No other available slots are currently available.', [
+              { id: 'confirm_booking', title: 'Keep current slot' },
+              { id: 'cancel', title: 'Cancel' }
+            ]);
           }
+          
           let currentIndex = draft.slotIndex || 0;
           currentIndex++;
-          if (currentIndex >= slots.length) currentIndex = 0;
+          if (currentIndex >= alternativeSlots.length) currentIndex = 0;
           
-          draft.selectedSlot = slots[currentIndex];
+          draft.selectedSlot = alternativeSlots[currentIndex];
           draft.slotIndex = currentIndex;
           await this.conversationService.updateState(senderId, { currentState: CONVERSATION_STATES.APPT_CONFIRM_SLOT, draftData: draft });
           
-          const start = new Date(slots[currentIndex].start);
+          const start = new Date(alternativeSlots[currentIndex].start);
           const timeString = start.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' });
           
           return this.sendInteractiveButtons(senderId, `Available slot: ${timeString} (IST / Asia/Kolkata). Would you like to confirm?`, [
@@ -379,11 +423,12 @@ export class WhatsappController {
         }
 
       case 'cancel':
+        if (session.currentState !== CONVERSATION_STATES.APPT_CONFIRM_SLOT) return this.sendStaleWarning(senderId);
         await this.conversationService.updateState(senderId, { currentState: CONVERSATION_STATES.MAIN_MENU, draftData: {} });
         return this.sendText(senderId, 'Booking cancelled. Returning to main menu.');
 
       case 'visa_appointment':
-        if (session.currentState !== CONVERSATION_STATES.SELECT_APPOINTMENT) return this.sendMainMenu(senderId);
+        if (session.currentState !== CONVERSATION_STATES.SELECT_APPOINTMENT) return this.sendStaleWarning(senderId);
         await this.conversationService.updateState(senderId, { currentState: CONVERSATION_STATES.APPT_VISA_DESTINATION, draftData: {} });
         return this.sendText(senderId, 'For which destination do you need a visa appointment?');
 
@@ -395,6 +440,7 @@ export class WhatsappController {
 
       // DOCUMENTS
       case 'menu_documents':
+        if (session.currentState !== CONVERSATION_STATES.MAIN_MENU) return this.sendStaleWarning(senderId);
         await this.conversationService.updateState(senderId, { currentState: CONVERSATION_STATES.SELECT_DOCUMENT });
         return this.sendInteractiveButtons(senderId, 'Document Portal. What would you like to do?', [
           { id: 'doc_select', title: 'Select Document' },
@@ -403,7 +449,8 @@ export class WhatsappController {
         ]);
 
       case 'doc_select':
-        if (session.currentState !== CONVERSATION_STATES.SELECT_DOCUMENT) return this.sendMainMenu(senderId);
+        if (session.currentState !== CONVERSATION_STATES.SELECT_DOCUMENT && session.currentState !== CONVERSATION_STATES.MAIN_MENU) return this.sendStaleWarning(senderId);
+        await this.conversationService.updateState(senderId, { currentState: CONVERSATION_STATES.SELECT_DOCUMENT });
         return this.sendInteractiveButtons(senderId, 'Select a document to upload for your application:', [
           { id: 'doc_passport', title: 'Passport' },
           { id: 'doc_photo', title: 'Photo' },
@@ -411,14 +458,14 @@ export class WhatsappController {
         ]);
 
       case 'doc_status':
-        if (session.currentState !== CONVERSATION_STATES.SELECT_DOCUMENT) return this.sendMainMenu(senderId);
+        if (session.currentState !== CONVERSATION_STATES.SELECT_DOCUMENT && session.currentState !== CONVERSATION_STATES.MAIN_MENU) return this.sendStaleWarning(senderId);
         const statusMap = await this.documentsService.getDocumentsStatus(caseId);
         return this.sendText(senderId, `Status Report:\nPassport: ${statusMap['Passport']}\nPhoto: ${statusMap['Photo']}\nTravel Itinerary: ${statusMap['Travel Itinerary']}\n\nYour documents are pending review.`);
 
       case 'doc_passport':
       case 'doc_photo':
       case 'doc_itinerary':
-        if (session.currentState !== CONVERSATION_STATES.SELECT_DOCUMENT) return this.sendMainMenu(senderId);
+        if (session.currentState !== CONVERSATION_STATES.SELECT_DOCUMENT) return this.sendStaleWarning(senderId);
         const docName = actionId === 'doc_passport' ? 'Passport' : actionId === 'doc_photo' ? 'Photo' : 'Travel Itinerary';
         await this.conversationService.updateState(senderId, { currentState: CONVERSATION_STATES.AWAIT_UPLOAD, selectedDoc: docName });
         return this.sendText(senderId, `Please send the file for: ${docName}. (Accepted formats: Image, PDF)`);
@@ -477,5 +524,9 @@ export class WhatsappController {
       { id: 'menu_appointments', title: 'Book Appointment' },
       { id: 'menu_documents', title: 'Submit Documents' }
     ]);
+  }
+
+  private sendStaleWarning(senderId: string) {
+    return this.sendText(senderId, 'This action is no longer active. Please use the latest options or type "hi" for the main menu.');
   }
 }
