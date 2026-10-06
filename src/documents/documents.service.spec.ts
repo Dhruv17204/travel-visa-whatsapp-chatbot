@@ -19,6 +19,7 @@ describe('DocumentsService', () => {
         findFirst: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
+        updateMany: vi.fn(),
       }
     };
     meta = {

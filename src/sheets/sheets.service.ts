@@ -34,12 +34,28 @@ export class SheetsService {
         ]
       ];
 
-      await sheets.spreadsheets.values.append({
+      const response = await sheets.spreadsheets.values.get({
         spreadsheetId: sheetId,
-        range: 'Documents!A1',
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values },
+        range: 'Documents!A:A',
       });
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex(row => row[0] === document.id);
+
+      if (rowIndex !== -1) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: sheetId,
+          range: `Documents!A${rowIndex + 1}`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values },
+        });
+      } else {
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: sheetId,
+          range: 'Documents!A1',
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values },
+        });
+      }
 
       this.logger.log(`Synced Document ${document.id} to Sheets.`);
     } catch (error: any) {
@@ -69,12 +85,28 @@ export class SheetsService {
         ]
       ];
 
-      await sheets.spreadsheets.values.append({
+      const response = await sheets.spreadsheets.values.get({
         spreadsheetId: sheetId,
-        range: 'Appointments!A1',
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values },
+        range: 'Appointments!A:A',
       });
+      const rows = response.data.values || [];
+      const rowIndex = rows.findIndex(row => row[0] === appointment.id);
+
+      if (rowIndex !== -1) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: sheetId,
+          range: `Appointments!A${rowIndex + 1}`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values },
+        });
+      } else {
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: sheetId,
+          range: 'Appointments!A1',
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values },
+        });
+      }
 
       this.logger.log(`Synced Appointment ${appointment.id} to Sheets.`);
     } catch (error: any) {

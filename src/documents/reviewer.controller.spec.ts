@@ -73,8 +73,7 @@ describe('ReviewerController', () => {
   });
 
   it('should approve a document', async () => {
-    mockPrismaService.document.findUnique.mockResolvedValue({ id: 'doc1', caseId: 'case1', type: 'Passport', version: 1, state: 'RECEIVED' });
-    mockPrismaService.document.findFirst.mockResolvedValue(null); // No newer version
+    mockPrismaService.document.findUnique.mockResolvedValue({ id: 'doc1', caseId: 'case1', type: 'Passport', version: 1, currentFlag: 'true', state: 'RECEIVED' });
     mockPrismaService.document.update.mockResolvedValue({ id: 'doc1', caseId: 'case1', state: 'APPROVED', type: 'Passport' });
     mockPrismaService.conversationSession.findFirst.mockResolvedValue({ senderId: '123' });
 
@@ -90,8 +89,7 @@ describe('ReviewerController', () => {
   });
 
   it('should reject a document with reason', async () => {
-    mockPrismaService.document.findUnique.mockResolvedValue({ id: 'doc1', caseId: 'case1', type: 'Passport', version: 1, state: 'RECEIVED' });
-    mockPrismaService.document.findFirst.mockResolvedValue(null);
+    mockPrismaService.document.findUnique.mockResolvedValue({ id: 'doc1', caseId: 'case1', type: 'Passport', version: 1, currentFlag: 'true', state: 'RECEIVED' });
     mockPrismaService.document.update.mockResolvedValue({ id: 'doc1', caseId: 'case1', state: 'REJECTED', type: 'Passport' });
     mockPrismaService.conversationSession.findFirst.mockResolvedValue({ senderId: '123' });
 
@@ -109,8 +107,7 @@ describe('ReviewerController', () => {
   });
 
   it('should prevent stale reviewer action (version mismatch)', async () => {
-    mockPrismaService.document.findUnique.mockResolvedValue({ id: 'doc1', caseId: 'case1', type: 'Passport', version: 1, state: 'RECEIVED' });
-    mockPrismaService.document.findFirst.mockResolvedValue({ id: 'doc2', version: 2 }); // Newer version exists
+    mockPrismaService.document.findUnique.mockResolvedValue({ id: 'doc1', caseId: 'case1', type: 'Passport', version: 1, currentFlag: 'false', state: 'RECEIVED' });
 
     await expect(controller.approveDocument('doc1', 'test-token')).rejects.toThrow('This document version is no longer current.');
   });

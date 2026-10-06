@@ -8,8 +8,10 @@ export class SlackService {
     if (newState) {
       await this.sendSlackMessage(`📄 *Document ${newState}*\nCase ID: ${caseId}\nDoc Type: ${type}\nStatus: ${newState}`);
     } else {
-      const reviewUrl = `http://localhost:3000/reviewer/documents?token=${process.env.REVIEWER_TOKEN}`;
-      await this.sendSlackMessage(`📄 *New Document Received*\nCase ID: ${caseId}\nDoc Type: ${type}\nStatus: PENDING_REVIEW\n<${reviewUrl}|Review required>`);
+      const baseUrl = process.env.REVIEWER_BASE_URL || 'http://localhost:3000';
+      const label = process.env.REVIEWER_BASE_URL ? 'Review required' : 'Review required (LOCAL/DEMO)';
+      const reviewUrl = `${baseUrl}/reviewer/documents?token=${process.env.REVIEWER_TOKEN}`;
+      await this.sendSlackMessage(`📄 *New Document Received*\nCase ID: ${caseId}\nDoc Type: ${type}\nStatus: PENDING_REVIEW\n<${reviewUrl}|${label}>`);
     }
   }
 

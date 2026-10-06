@@ -72,12 +72,18 @@ export class DocumentsService {
     const version = latestDoc ? latestDoc.version + 1 : 1;
 
     // 6. Persist to PostgreSQL (Source of truth)
+    await this.prisma.document.updateMany({
+      where: { caseId, type: docType },
+      data: { currentFlag: 'false' },
+    });
+
     const document = await this.prisma.document.create({
       data: {
         caseId,
         applicantId,
         type: docType,
         version,
+        currentFlag: 'true',
         state: 'RECEIVED', // Must NEVER automatically become APPROVED
         fileHash: actualHash,
       },
@@ -125,8 +131,7 @@ export class DocumentsService {
 
   async getDocumentsStatus(caseId: string): Promise<Record<string, string>> {
     const docs = await this.prisma.document.findMany({
-      where: { caseId },
-      orderBy: { createdTime: 'desc' }
+      where: { caseId, currentFlag: 'true' },
     });
     
     const statusMap: Record<string, string> = {
@@ -136,9 +141,7 @@ export class DocumentsService {
     };
     
     for (const doc of docs) {
-      if (statusMap[doc.type] === 'MISSING') {
-        statusMap[doc.type] = doc.state;
-      }
+      statusMap[doc.type] = doc.state;
     }
     return statusMap;
   }

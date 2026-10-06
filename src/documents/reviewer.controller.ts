@@ -32,12 +32,14 @@ export class ReviewerController {
     let html = `<html><body><h1>Pending Document Reviews</h1><ul>`;
     for (const doc of docs) {
       html += `<li>
-        Case: ${doc.caseId} | Type: ${doc.type} | Version: ${doc.version} | Date: ${doc.createdTime} <br>
-        Link: <a href="https://drive.google.com/file/d/${doc.driveFileId}/view" target="_blank">View Document</a> <br>
-        <form method="POST" action="/reviewer/documents/${doc.id}/approve?token=${token}" style="display:inline;">
+        <strong>Case:</strong> ${doc.caseId} | <strong>Applicant:</strong> ${doc.applicantId || 'N/A'} <br>
+        <strong>Type:</strong> ${doc.type} | <strong>Version:</strong> ${doc.version} <br>
+        <strong>Received:</strong> ${doc.createdTime} | <strong>State:</strong> ${doc.state} <br>
+        <strong>Link:</strong> <a href="https://drive.google.com/file/d/${doc.driveFileId}/view" target="_blank">View Document</a> <br>
+        <form method="POST" action="/reviewer/documents/${doc.id}/approve?token=${token}" style="display:inline; margin-top:5px;">
           <button type="submit">Approve</button>
         </form>
-        <form method="POST" action="/reviewer/documents/${doc.id}/reject?token=${token}" style="display:inline;">
+        <form method="POST" action="/reviewer/documents/${doc.id}/reject?token=${token}" style="display:inline; margin-top:5px;">
           <input type="text" name="reason" placeholder="Rejection reason required" required>
           <button type="submit">Reject</button>
         </form>
@@ -66,12 +68,7 @@ export class ReviewerController {
     const document = await this.prisma.document.findUnique({ where: { id } });
     if (!document) throw new HttpException('Document not found', HttpStatus.NOT_FOUND);
 
-    const latestDoc = await this.prisma.document.findFirst({
-      where: { caseId: document.caseId, type: document.type },
-      orderBy: { version: 'desc' },
-    });
-
-    if (latestDoc && latestDoc.version > document.version) {
+    if (document.currentFlag !== 'true') {
       throw new HttpException('This document version is no longer current.', HttpStatus.BAD_REQUEST);
     }
 
