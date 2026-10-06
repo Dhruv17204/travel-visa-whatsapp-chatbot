@@ -34,40 +34,47 @@ export class CalendarService {
         requestBody: {
           timeMin: timeMin.toISOString(),
           timeMax: timeMax.toISOString(),
-          timeZone: 'UTC',
+          timeZone: 'Asia/Kolkata',
           items: [{ id: calendarId }],
         },
       });
 
       const busy = res.data.calendars?.[calendarId]?.busy || [];
-      
-      // Calculate a dummy slot tomorrow for MVP if no complex scheduling logic exists
-      // In a real app we'd map work hours and subtract busy slots.
-      // For this implementation, we will just offer tomorrow at 10 AM UTC if it doesn't overlap.
-      
-      const slotStart = new Date();
-      slotStart.setDate(slotStart.getDate() + 1);
-      slotStart.setUTCHours(10, 0, 0, 0);
-      
-      const slotEnd = new Date(slotStart);
-      slotEnd.setUTCHours(11, 0, 0, 0);
+      const availableSlots: CalendarSlot[] = [];
+      const now = new Date();
 
-      const isBusy = busy.some(b => {
-        if (!b.start || !b.end) return false;
-        const bStart = new Date(b.start).getTime();
-        const bEnd = new Date(b.end).getTime();
-        return slotStart.getTime() < bEnd && slotEnd.getTime() > bStart;
-      });
+      // Check the next 7 days for slots
+      for (let dayOffset = 1; dayOffset <= 7; dayOffset++) {
+        // Business hours: 10 AM to 4 PM IST (4:30 AM to 10:30 AM UTC)
+        // We'll just generate slots from 5:00 UTC to 12:00 UTC for simplicity
+        for (let hour = 5; hour <= 12; hour++) {
+          const slotStart = new Date();
+          slotStart.setDate(now.getDate() + dayOffset);
+          slotStart.setUTCHours(hour, 0, 0, 0);
 
-      if (isBusy) {
-        return []; // No slots
+          const slotEnd = new Date(slotStart);
+          slotEnd.setUTCHours(hour + 1, 0, 0, 0);
+
+          const isBusy = busy.some(b => {
+            if (!b.start || !b.end) return false;
+            const bStart = new Date(b.start).getTime();
+            const bEnd = new Date(b.end).getTime();
+            return slotStart.getTime() < bEnd && slotEnd.getTime() > bStart;
+          });
+
+          if (!isBusy) {
+            availableSlots.push({
+              start: slotStart,
+              end: slotEnd,
+              staffCalendarId: calendarId
+            });
+            if (availableSlots.length >= 3) break;
+          }
+        }
+        if (availableSlots.length >= 3) break;
       }
 
-      return [{
-        start: slotStart,
-        end: slotEnd,
-        staffCalendarId: calendarId
-      }];
+      return availableSlots;
     } catch (error: any) {
       this.logger.error(`Calendar availability check failed: ${error.message}`);
       throw new Error('CALENDAR_UNAVAILABLE');
