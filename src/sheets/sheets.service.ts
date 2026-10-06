@@ -26,7 +26,9 @@ export class SheetsService {
           document.type,
           document.version,
           document.state,
-          document.fileHash || '',
+          document.reviewer || '',
+          document.reason || '',
+          document.reviewedTime ? document.reviewedTime.toISOString() : '',
           document.driveFileId || '',
           document.createdTime.toISOString()
         ]
