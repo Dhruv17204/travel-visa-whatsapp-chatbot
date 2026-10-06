@@ -137,7 +137,7 @@ export class DocumentsService {
     
     for (const doc of docs) {
       if (statusMap[doc.type] === 'MISSING') {
-        statusMap[doc.type] = doc.status;
+        statusMap[doc.type] = doc.state;
       }
     }
     return statusMap;
