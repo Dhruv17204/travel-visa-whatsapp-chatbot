@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { SheetsService } from '../sheets/sheets.service.js';
 import { SlackService } from '../slack/slack.service.js';
 import { MetaService } from '../whatsapp/meta.service.js';
-import { UnauthorizedException, HttpException } from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 import { vi } from 'vitest';
 
 describe('ReviewerController', () => {
@@ -13,6 +13,7 @@ describe('ReviewerController', () => {
   let mockSheetsService: any;
   let mockSlackService: any;
   let mockMetaService: any;
+  let mockRes: any;
 
   beforeEach(async () => {
     mockPrismaService = {
@@ -37,6 +38,10 @@ describe('ReviewerController', () => {
 
     mockMetaService = {
       sendRequest: vi.fn().mockResolvedValue({}),
+    };
+
+    mockRes = {
+      status: vi.fn(),
     };
 
     process.env.REVIEWER_TOKEN = 'test-token';
@@ -64,7 +69,7 @@ describe('ReviewerController', () => {
 
   it('should return HTML of pending documents', async () => {
     mockPrismaService.document.findMany.mockResolvedValue([
-      { id: 'doc1', caseId: 'case1', type: 'Passport', version: 1, state: 'RECEIVED', createdTime: new Date() }
+      { id: 'doc1', caseId: 'case1', type: 'Passport', version: 1, currentFlag: 'true', state: 'RECEIVED', createdTime: new Date() }
     ]);
     const html = await controller.getPendingDocuments('test-token');
     expect(html).toContain('doc1');
@@ -77,7 +82,7 @@ describe('ReviewerController', () => {
     mockPrismaService.document.update.mockResolvedValue({ id: 'doc1', caseId: 'case1', state: 'APPROVED', type: 'Passport' });
     mockPrismaService.conversationSession.findFirst.mockResolvedValue({ senderId: '123' });
 
-    const result = await controller.approveDocument('doc1', 'test-token');
+    const result = await controller.approveDocument('doc1', 'test-token', mockRes);
     
     expect(mockPrismaService.document.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'doc1' },
@@ -85,7 +90,7 @@ describe('ReviewerController', () => {
     }));
     expect(mockSlackService.sendReviewNotification).toHaveBeenCalled();
     expect(mockMetaService.sendRequest).toHaveBeenCalled();
-    expect(result).toContain('Document APPROVED successfully');
+    expect(result).toContain('Document Approved Successfully');
   });
 
   it('should reject a document with reason', async () => {
@@ -93,22 +98,26 @@ describe('ReviewerController', () => {
     mockPrismaService.document.update.mockResolvedValue({ id: 'doc1', caseId: 'case1', state: 'REJECTED', type: 'Passport' });
     mockPrismaService.conversationSession.findFirst.mockResolvedValue({ senderId: '123' });
 
-    const result = await controller.rejectDocument('doc1', 'test-token', 'Blurred image');
+    const result = await controller.rejectDocument('doc1', 'test-token', 'Blurred image', mockRes);
     
     expect(mockPrismaService.document.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'doc1' },
       data: expect.objectContaining({ state: 'REJECTED', reason: 'Blurred image' })
     }));
-    expect(result).toContain('Document REJECTED successfully');
+    expect(result).toContain('Document Rejected');
   });
 
   it('should require a reason for rejection', async () => {
-    await expect(controller.rejectDocument('doc1', 'test-token', '   ')).rejects.toThrow(HttpException);
+    const result = await controller.rejectDocument('doc1', 'test-token', '   ', mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(400);
+    expect(result).toContain('Validation Error');
   });
 
   it('should prevent stale reviewer action (version mismatch)', async () => {
     mockPrismaService.document.findUnique.mockResolvedValue({ id: 'doc1', caseId: 'case1', type: 'Passport', version: 1, currentFlag: 'false', state: 'RECEIVED' });
 
-    await expect(controller.approveDocument('doc1', 'test-token')).rejects.toThrow('This document version is no longer current.');
+    const result = await controller.approveDocument('doc1', 'test-token', mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(400);
+    expect(result).toContain('Document Version No Longer Current');
   });
 });
